@@ -410,6 +410,169 @@ def diagnose(
 
 
 @app.command()
+def gridtest(
+    frm: str = typer.Option(..., "--from", help="시작일 YYYYMMDD"),
+    to: str = typer.Option(..., "--to", help="종료일 YYYYMMDD"),
+    every: int = typer.Option(5, "--every", help="리밸런싱 주기(일)"),
+    top: int = typer.Option(15, "--top", help="리더보드 상위 몇 개 표시"),
+):
+    """규칙기반 전략 조합을 자동 그리드 백테스트해 수익률 순위를 매긴다 (무료·LLM 미사용)."""
+    import json
+
+    from .engine.gridtest import run_gridtest
+
+    cfg = load_config()
+    from .strategy.registry import default_grid
+    profiles = default_grid()
+    with console.status(f"[cyan]{len(profiles)}개 전략 조합 백테스트 중...[/]"):
+        results = run_gridtest(cfg, frm, to, every, profiles)
+
+    # 저장 (대시보드/재사용)
+    out_path = cfg.data_dir / "gridtest_results.json"
+    out_path.write_text(json.dumps(
+        {"from": frm, "to": to, "every": every, "results": results},
+        ensure_ascii=False, indent=1), encoding="utf-8")
+
+    bench = next((r.get("benchmark_pct") for r in results if r.get("benchmark_pct") is not None), None)
+    title = f"전략 조합 리더보드 ({frm}~{to}, {every}일 리밸런싱)"
+    if bench is not None:
+        title += f" · KOSPI {bench:+.2f}%"
+    table = Table(title=title)
+    for c in ("#", "전략", "수익률", "초과", "샤프", "MDD", "거래"):
+        table.add_column(c)
+    for i, r in enumerate(results[:top], 1):
+        rc = "green" if r["return_pct"] >= 0 else "red"
+        ec = "green" if (r.get("excess_pct") or 0) >= 0 else "red"
+        table.add_row(
+            str(i), r["name"], f"[{rc}]{r['return_pct']:+.2f}%[/]",
+            f"[{ec}]{r['excess_pct']:+.2f}%[/]" if r.get("excess_pct") is not None else "N/A",
+            str(r["sharpe"]) if r["sharpe"] is not None else "N/A",
+            f"{r['mdd_pct']:+.1f}%" if r["mdd_pct"] is not None else "N/A",
+            str(r["trades"]))
+    console.print(table)
+    console.print(f"[dim]총 {len(results)}개 조합 · 결과 저장: {out_path}[/]")
+    console.print("[dim]선택: config.yaml 의 strategy.active_profile 에 전략명을 넣으면 "
+                  "향후 simrun 에 적용(다음 단계)[/]")
+
+
+@app.command()
+def simrun(
+    frm: str = typer.Option(..., "--from", help="시작일 YYYYMMDD"),
+    to: str = typer.Option(..., "--to", help="종료일 YYYYMMDD"),
+    every: int = typer.Option(5, "--every"),
+    profile: str = typer.Option(None, "--profile", "-p",
+                               help="전략명 (기본: config strategy.active_profile)"),
+):
+    """선택한 규칙기반 전략 하나를 백테스트해 상세(성과 + 최종 보유)를 보여준다."""
+    from datetime import timedelta
+
+    from .data import market
+    from .data.pricestore import PriceStore
+    from .engine.gridtest import precompute, simulate
+    from .strategy.registry import profile_by_name
+
+    cfg = load_config()
+    name = profile or cfg.strategy.active_profile
+    p = profile_by_name(name)
+    if not p:
+        console.print(f"[red]전략 '{name}' 을(를) 찾을 수 없습니다. gridtest 리더보드의 전략명을 쓰세요.[/]")
+        raise typer.Exit(1)
+
+    start = datetime.strptime(market.norm_date(frm), "%Y%m%d")
+    end = datetime.strptime(market.norm_date(to), "%Y%m%d")
+    dates = []
+    d = start
+    while d <= end:
+        dates.append(d.strftime("%Y%m%d"))
+        d += timedelta(days=every)
+    bench = market._BENCH_ETF.get(cfg.portfolio.benchmark, "069500")
+    pre_start = (start - timedelta(days=cfg.data.ohlcv_lookback_days + 40)).strftime("%Y%m%d")
+    pre_end = (end + timedelta(days=10)).strftime("%Y%m%d")
+    with console.status(f"[cyan]'{name}' 시뮬레이션 중...[/]"):
+        store = PriceStore(cfg.watchlist + [bench], pre_start, pre_end)
+        z, ex, bc = precompute(cfg, dates, store, bench)
+        broker = simulate(cfg, p, dates, store, z, ex)
+    m = broker.metrics([bc[ds] for ds in dates if bc.get(ds)])
+
+    def pct(v):
+        return "N/A" if v is None else f"{v:+.2f}%"
+
+    console.print(Panel(f"[bold]전략: {name}[/]  ({frm}~{to}, {every}일 리밸런싱)", expand=False))
+    console.print(f"수익률 {pct(m['return_pct'])} · 초과 {pct(m.get('excess_pct'))} · "
+                  f"샤프 {m['sharpe']} · MDD {pct(m['mdd_pct'])} · 거래 {m['trades']}회")
+    table = Table(title="최종 보유")
+    for c in ("종목", "수량", "평단", "현재가", "평가손익"):
+        table.add_column(c)
+    for tk, posd in broker.pos.items():
+        px = store.price_on(tk, dates[-1]) or posd["avg"]
+        pnl = (px / posd["avg"] - 1) * 100 if posd["avg"] else 0
+        table.add_row(market.get_name(tk), f"{posd['qty']:,}", _won(posd["avg"]),
+                      _won(px), f"{pnl:+.1f}%")
+    console.print(table)
+
+
+@app.command()
+def simforward(
+    date: str = typer.Option(None, "--date", "-d", help="기준일 YYYYMMDD (기본: 오늘)"),
+    profile: str = typer.Option(None, "--profile", "-p",
+                               help="전략명 (기본: config strategy.active_profile)"),
+):
+    """선택한 규칙기반 전략으로 하루치 포워드 페이퍼트레이딩(무료·누적). DB: data/sim.db"""
+    from datetime import timedelta
+
+    from .data import market
+    from .data.dart import DartClient
+    from .data.pricestore import PriceStore
+    from .engine.gridtest import factor_z_for_date
+    from .portfolio.paper_broker import PaperBroker
+    from .store.repo import Repo
+    from .strategy import regime
+    from .strategy.registry import profile_by_name
+
+    cfg = load_config()
+    name = profile or cfg.strategy.active_profile
+    p = profile_by_name(name)
+    if not p:
+        console.print(f"[red]전략 '{name}' 을(를) 찾을 수 없습니다.[/]")
+        raise typer.Exit(1)
+
+    ds = market.norm_date(date) if date else market.today_str()
+    sim_db = cfg.data_dir / "sim.db"
+    repo = Repo(sim_db)
+    broker = PaperBroker(cfg, repo)
+    bench = market._BENCH_ETF.get(cfg.portfolio.benchmark, "069500")
+
+    dt = datetime.strptime(ds, "%Y%m%d")
+    pre_start = (dt - timedelta(days=cfg.data.ohlcv_lookback_days + 40)).strftime("%Y%m%d")
+    with console.status(f"[cyan]'{name}' {ds} 리밸런싱 중...[/]"):
+        store = PriceStore(cfg.watchlist + [bench], pre_start, ds)
+        dart = DartClient(cfg.dart_api_key, cfg.cache_dir)
+        z = factor_z_for_date(cfg, ds, store, dart)
+        exposure = regime.exposure(store, bench, ds) if p.use_regime else 1.0
+        targets = p.target_weights(p.composite(z), exposure,
+                                   cfg.portfolio.max_position_weight)
+        price_map = {tk: px for tk in cfg.watchlist if (px := store.price_on(tk, ds))}
+        name_map = {tk: market.get_name(tk) for tk in cfg.watchlist}
+        if p.use_stop:
+            broker.apply_risk_rules(price_map, ds)
+        fills = broker.rebalance(targets, price_map, ds, name_map)
+        broker.repo.snapshot_equity(_iso(ds), broker.cash,
+                                    broker.holdings_value(price_map))
+
+    console.print(Panel(f"[bold]{name}[/] · {ds} 포워드 리밸런싱 (sim.db)", expand=False))
+    if fills:
+        for f in fills:
+            console.print(f"  {f.side} {f.name} {f.qty}주 @ {_won(f.price)}")
+    else:
+        console.print("  [dim]체결 없음(목표와 현 보유 일치)[/]")
+    equity = broker.total_equity(price_map)
+    initial = float(repo.state_get("initial_capital") or cfg.portfolio.initial_capital)
+    ret = (equity / initial - 1) * 100 if initial else 0
+    console.print(f"목표종목 {list(targets)} · 총자산 {_won(equity)} ({ret:+.2f}%) · 현금 {_won(broker.cash)}")
+    repo.close()
+
+
+@app.command()
 def compare(
     a: str = typer.Option(..., "--a", help="DB 경로 A (예: data/mock_bt.db)"),
     b: str = typer.Option(..., "--b", help="DB 경로 B (예: data/real_bt.db)"),

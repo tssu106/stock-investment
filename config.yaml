@@ -31,6 +31,10 @@ data:
   disclosure_lookback_days: 90 # DART 공시 조회 기간(일)
   cache_ttl_hours: 6          # 데이터 캐시 유효시간
 
+strategy:
+  # gridtest 리더보드에서 고른 규칙기반 전략명 (simrun 기본값)
+  active_profile: "mom+trend+all"
+
 # 분석/매매 대상 종목 (종목코드 6자리)
 watchlist:
   - "005930"   # 삼성전자

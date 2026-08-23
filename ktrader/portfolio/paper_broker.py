@@ -143,6 +143,40 @@ class PaperBroker:
             return self.sell(ticker, name, price, sell_qty, trade_date, run_id) if sell_qty > 0 else None
         return None  # HOLD
 
+    def rebalance(self, targets: dict[str, float], price_map: dict[str, float],
+                  trade_date: str, name_map: dict[str, str],
+                  run_id: int | None = None) -> list[Fill]:
+        """목표 비중으로 리밸런싱 (매도 먼저 → 매수). 규칙기반 전략용."""
+        equity = self.total_equity(price_map)
+        max_w = self.cfg.portfolio.max_position_weight
+        tgt_val = {tk: min(w, max_w) * equity for tk, w in targets.items()}
+        fills: list[Fill] = []
+        # 매도/축소 (목표에 없는 보유 포함)
+        for tk, pos in list(self.positions().items()):
+            px = price_map.get(tk)
+            if not px:
+                continue
+            cur = pos["qty"] * px
+            want = tgt_val.get(tk, 0.0)
+            if cur - want > px:
+                f = self.sell(tk, pos["name"], px, pos["qty"] - int(want // px),
+                              trade_date, run_id)
+                if f:
+                    fills.append(f)
+        # 매수/확대
+        for tk, want in tgt_val.items():
+            px = price_map.get(tk)
+            if not px or want <= 0:
+                continue
+            pos = self.repo.get_position(tk)
+            cur = (pos["qty"] if pos else 0) * px
+            if want - cur > px:
+                f = self.buy(tk, name_map.get(tk, tk), px, int((want - cur) // px),
+                             trade_date, run_id)
+                if f:
+                    fills.append(f)
+        return fills
+
     def apply_risk_rules(self, price_map: dict[str, float], trade_date: str,
                          run_id: int | None = None) -> list[tuple[str, Fill]]:
         """손절/익절 규칙에 걸리는 보유종목을 자동 청산. [(사유, Fill), ...] 반환."""

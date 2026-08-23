@@ -23,6 +23,13 @@
     padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px}
   button:hover{border-color:var(--accent)}
   .mockchk{color:var(--mut);font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none}
+  .tabs{display:flex;gap:4px;margin-bottom:18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;
+    color:var(--mut);padding:10px 16px;font-size:14px;cursor:pointer}
+  .tab:hover{color:var(--tx)}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+  .panel{display:none}
+  .panel.active{display:block}
   main{padding:20px 24px;max-width:1200px;margin:0 auto}
   .grid{display:grid;gap:14px}
   .cards{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:20px}
@@ -91,28 +98,41 @@
   </div>
 </header>
 <main>
-  <div class="grid cards" id="cards"></div>
+  <div class="tabs">
+    <button class="tab active" data-tab="portfolio" onclick="showTab('portfolio')">💼 포트폴리오</button>
+    <button class="tab" data-tab="strategy" onclick="showTab('strategy')">🏆 전략 리더보드</button>
+    <button class="tab" data-tab="decisions" onclick="showTab('decisions')">🧠 결정·에이전트</button>
+  </div>
 
-  <section>
-    <h2>📈 자산 추이</h2>
-    <div id="equity"><div class="empty">데이터 없음 — <code>ktrader run</code> 또는 <code>backtest</code> 실행 후 표시됩니다.</div></div>
-  </section>
-
-  <div class="grid" style="grid-template-columns:1fr 1fr;gap:20px" id="two">
+  <div class="panel active" id="tab-portfolio">
+    <div class="grid cards" id="cards"></div>
+    <section>
+      <h2>📈 자산 추이</h2>
+      <div id="equity"><div class="empty">데이터 없음 — <code>ktrader run</code> 또는 <code>backtest</code> 실행 후 표시됩니다.</div></div>
+    </section>
     <section>
       <h2>💼 보유 포지션 <span class="sub">종목 클릭 → 손익 원인 분석</span></h2>
       <div id="positions"></div>
     </section>
+  </div>
+
+  <div class="panel" id="tab-strategy">
+    <section>
+      <h2>🏆 전략 조합 리더보드 <span class="sub" id="grid-meta"></span></h2>
+      <div id="gridboard" class="scroll-y"></div>
+    </section>
+  </div>
+
+  <div class="panel" id="tab-decisions">
     <section>
       <h2>🎯 에이전트별 신호 적중률</h2>
       <div id="agents"></div>
     </section>
+    <section>
+      <h2>🧠 최근 결정 <span class="sub">행 클릭 → 에이전트 리포트</span></h2>
+      <div id="decisions" class="scroll-y"></div>
+    </section>
   </div>
-
-  <section>
-    <h2>🧠 최근 결정 <span class="sub">행 클릭 → 에이전트 리포트</span></h2>
-    <div id="decisions" class="scroll-y"></div>
-  </section>
 </main>
 
 <div id="detail">
@@ -271,8 +291,35 @@ async function openDiagnose(ticker, name){
   body.innerHTML=html;
 }
 
+function showTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active', p.id==='tab-'+name));
+}
+
+async function loadGrid(){
+  const d = await j('/api/gridtest');
+  const el = document.getElementById('gridboard');
+  const meta = document.getElementById('grid-meta');
+  if(!d.results || !d.results.length){
+    el.innerHTML='<div class="empty"><code>ktrader gridtest --from … --to …</code> 실행 후 표시됩니다.</div>';
+    meta.textContent=''; return;
+  }
+  const bench = d.results.find(r=>r.benchmark_pct!=null);
+  meta.textContent = `${d.from}~${d.to} · ${d.every}일 리밸런싱` +
+    (bench? ` · KOSPI ${pct(bench.benchmark_pct)}` : '');
+  el.innerHTML = `<table><thead><tr><th>#</th><th>전략</th><th class="num">수익률</th>
+    <th class="num">초과</th><th class="num">샤프</th><th class="num">MDD</th><th class="num">거래</th></tr></thead>
+    <tbody>${d.results.map((r,i)=>`<tr>
+      <td>${i+1}</td><td>${r.name}</td>
+      <td class="num ${cls(r.return_pct)}">${pct(r.return_pct)}</td>
+      <td class="num ${cls(r.excess_pct)}">${r.excess_pct==null?'N/A':pct(r.excess_pct)}</td>
+      <td class="num">${r.sharpe==null?'N/A':r.sharpe}</td>
+      <td class="num down">${r.mdd_pct==null?'N/A':pct(r.mdd_pct)}</td>
+      <td class="num">${r.trades}</td></tr>`).join('')}</tbody></table>`;
+}
+
 async function loadAll(){
-  await Promise.all([loadSummary(),loadPositions(),loadAgents(),loadDecisions(),loadEquity()]);
+  await Promise.all([loadSummary(),loadPositions(),loadAgents(),loadDecisions(),loadEquity(),loadGrid()]);
 }
 loadAll();
 </script>

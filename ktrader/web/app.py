@@ -122,6 +122,22 @@ def api_equity() -> JSONResponse:
     return JSONResponse(out)
 
 
+@app.get("/api/gridtest")
+def api_gridtest() -> JSONResponse:
+    """저장된 전략 조합 리더보드(gridtest_results.json)를 반환."""
+    import json
+
+    cfg = _cfg()
+    p = cfg.data_dir / "gridtest_results.json"
+    if not p.exists():
+        return JSONResponse({"results": [], "meta": None})
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return JSONResponse({"results": [], "meta": None})
+    return JSONResponse(data)
+
+
 @app.get("/api/diagnose/{ticker}")
 def api_diagnose(ticker: str, refresh: bool = False) -> JSONResponse:
     """종목 클릭 시 평가손익 원인 분석. 하루 단위로 캐시(반복 클릭 비용 절감)."""

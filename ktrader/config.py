@@ -55,11 +55,18 @@ class DataConfig:
 
 
 @dataclass
+class StrategyConfig:
+    # gridtest 리더보드에서 고른 규칙기반 전략명 (simrun 기본값)
+    active_profile: str = "mom+trend+all"
+
+
+@dataclass
 class Config:
     llm: LLMConfig = field(default_factory=LLMConfig)
     engine: EngineConfig = field(default_factory=EngineConfig)
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
     data: DataConfig = field(default_factory=DataConfig)
+    strategy: StrategyConfig = field(default_factory=StrategyConfig)
     watchlist: list[str] = field(default_factory=list)
 
     # 비밀 키 (.env)
@@ -102,6 +109,7 @@ def load_config(config_path: str | Path | None = None) -> Config:
         engine=EngineConfig(**_section(raw, "engine")),
         portfolio=PortfolioConfig(**_section(raw, "portfolio")),
         data=DataConfig(**_section(raw, "data")),
+        strategy=StrategyConfig(**_section(raw, "strategy")),
         watchlist=[str(t) for t in (raw.get("watchlist") or [])],
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY") or None,
         dart_api_key=os.getenv("DART_API_KEY") or None,
