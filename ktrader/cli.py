@@ -306,6 +306,65 @@ def portfolio(mock: bool = typer.Option(False, "--mock", "-m")):
 
 
 @app.command()
+def status():
+    """한눈에 보는 상태: 마지막 자동실행 · 결정 누적 · 자산 스냅샷 (네트워크 불필요)."""
+    from .store.repo import Repo
+
+    cfg = load_config()
+    console.print(Panel(f"KTrader 상태 · {datetime.now():%Y-%m-%d %H:%M}", expand=False))
+
+    # 1) 자동실행 로그 (PC가 켜져서 돌았는지 증거)
+    logf = cfg.data_dir / "logs" / "daily.log"
+    if logf.exists():
+        lines = [x.strip() for x in
+                 logf.read_text(encoding="utf-8", errors="ignore").splitlines() if x.strip()]
+        last_run = next((x for x in reversed(lines) if x.startswith("RUN")), None)
+        last_done = next((x for x in reversed(lines) if x.startswith("DONE")), None)
+        msg = last_run or "실행 기록 없음"
+        if last_done:
+            msg += f"  →  {last_done}"
+        console.print(f"[bold]자동실행 로그[/]: {msg}")
+    else:
+        console.print("[bold]자동실행 로그[/]: [dim]아직 없음 (data/logs/daily.log) — 첫 자동실행 전[/]")
+
+    def summarize_db(path, label):
+        if not path.exists():
+            console.print(f"\n[bold cyan]{label}[/] [dim]({path.name}) — 데이터 없음[/]")
+            return
+        r = Repo(path)
+        row = r.conn.execute(
+            "SELECT COUNT(*) n, COUNT(DISTINCT run_date) d, MAX(run_date) last FROM runs"
+        ).fetchone()
+        last_date = row["last"]
+        console.print(f"\n[bold cyan]{label}[/] [dim]({path.name})[/]")
+        if last_date:
+            today_n = r.conn.execute(
+                "SELECT COUNT(*) n FROM runs WHERE run_date=?", (last_date,)).fetchone()["n"]
+            console.print(f"  최근 결정일: [bold]{last_date}[/] (그날 {today_n}건) · "
+                          f"누적 {row['n']}건 / {row['d']}거래일")
+        curve = r.equity_curve()
+        if curve:
+            last = curve[-1]
+            initial = float(r.state_get("initial_capital") or cfg.portfolio.initial_capital)
+            ret = (last["total_equity"] / initial - 1) * 100 if initial else 0
+            color = "green" if ret >= 0 else "red"
+            console.print(f"  마지막 자산 스냅샷: [bold]{last['snapshot_date']}[/] · "
+                          f"총자산 {_won(last['total_equity'])} ([{color}]{ret:+.2f}%[/])")
+        pos = r.get_positions()
+        if pos:
+            console.print("  보유 " + str(len(pos)) + "종목: "
+                          + ", ".join(f"{p['name']}({p['qty']})" for p in pos[:8]))
+        r.close()
+
+    summarize_db(cfg.data_dir / "ktrader.db", "LLM 포트폴리오")
+    summarize_db(cfg.data_dir / "sim.db", "규칙기반 전략(simforward)")
+
+    console.print(f"\n[dim]활성 전략: {cfg.strategy.active_profile} · 키: "
+                  f"ANTHROPIC {'✓' if cfg.anthropic_api_key else '✗'} / "
+                  f"DART {'✓' if cfg.dart_api_key else '✗'}[/]")
+
+
+@app.command()
 def score(include_mock: bool = typer.Option(False, "--include-mock",
                                             help="모의(mock) 결정도 집계에 포함")):
     """사후평가 + 성과지표 + 에이전트 적중률 (기본: 실제 결정만)."""

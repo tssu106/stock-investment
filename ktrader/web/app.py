@@ -167,8 +167,13 @@ def api_diagnose(ticker: str, refresh: bool = False) -> JSONResponse:
 
 
 def main() -> None:
+    import os
+
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8848)
+    # 기본은 로컬 전용(127.0.0.1). 원격/LAN 에서 보려면 KTRADER_WEB_HOST=0.0.0.0
+    host = os.getenv("KTRADER_WEB_HOST", "127.0.0.1")
+    port = int(os.getenv("KTRADER_WEB_PORT", "8848"))
+    uvicorn.run(app, host=host, port=port)
 
 
 if __name__ == "__main__":
