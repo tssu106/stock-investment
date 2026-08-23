@@ -1,0 +1,43 @@
+# === KTrader 설정 ===
+# 비밀 키는 여기가 아니라 .env 에 둡니다.
+
+llm:
+  # 깊은 추론용(리서치 토론/최종 결정). 환경 안내 기준 최신 모델 ID.
+  deep_model: "claude-sonnet-5"
+  # 빠르고 저렴한 요약/보조용.
+  quick_model: "claude-haiku-4-5-20251001"
+  max_tokens: 2000
+  temperature: 0.4
+
+engine:
+  debate_rounds: 2        # 강세 vs 약세 연구원 토론 라운드 수
+  risk_rounds: 1          # 공격/중립/보수 리스크 토론 라운드 수
+  reflection_horizon_days: 5   # 며칠 뒤 결과로 판단 적중 여부를 평가할지
+  use_sentiment_analyst: false # 네이버 종목토론방 심리분석가 (2단계)
+
+portfolio:
+  initial_capital: 10000000   # 초기 자본 1천만원
+  commission_rate: 0.00015    # 위탁수수료 0.015% (매수/매도 공통)
+  sell_tax_rate: 0.0018       # 증권거래세(매도 시) 0.18% - 연도별로 조정
+  max_position_weight: 0.20   # 종목당 최대 비중 20%
+  benchmark: "1001"           # 벤치마크 지수 코드 (1001=KOSPI, 2001=KOSDAQ)
+  stop_loss_pct: -0.10        # -10% 이하 자동 손절 (0 이면 비활성)
+  take_profit_pct: 0.0        # 익절 기준 (0 이면 비활성)
+  min_confidence: 0.55        # 신규 매수 최소 확신(미만이면 보류)
+
+data:
+  news_pages: 2               # 네이버 금융 뉴스 크롤 페이지 수
+  ohlcv_lookback_days: 120    # 기술분석용 시세 조회 기간(일)
+  disclosure_lookback_days: 90 # DART 공시 조회 기간(일)
+  cache_ttl_hours: 6          # 데이터 캐시 유효시간
+
+# 분석/매매 대상 종목 (종목코드 6자리)
+watchlist:
+  - "005930"   # 삼성전자
+  - "000660"   # SK하이닉스
+  - "035420"   # NAVER
+  - "005380"   # 현대차
+  - "051910"   # LG화학
+  - "035720"   # 카카오
+  - "005490"   # POSCO홀딩스
+  - "068270"   # 셀트리온

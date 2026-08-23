@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KTrader 대시보드</title>
+<style>
+  :root{
+    --bg:#0e1116; --card:#171b22; --card2:#1e232c; --line:#2a313c;
+    --tx:#e6edf3; --mut:#8b98a9; --accent:#4c8dff;
+    --up:#28c76f; --down:#ff5c6c; --hold:#f5a524;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);
+    font-family:"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:14px}
+  a{color:var(--accent)}
+  header{display:flex;align-items:center;justify-content:space-between;
+    padding:16px 24px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+  header h1{font-size:18px;margin:0;letter-spacing:.5px}
+  header h1 span{color:var(--accent)}
+  .sub{color:var(--mut);font-size:12px;margin-left:10px}
+  button{background:var(--card2);color:var(--tx);border:1px solid var(--line);
+    padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px}
+  button:hover{border-color:var(--accent)}
+  .mockchk{color:var(--mut);font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none}
+  main{padding:20px 24px;max-width:1200px;margin:0 auto}
+  .grid{display:grid;gap:14px}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card .label{color:var(--mut);font-size:12px;margin-bottom:6px;display:flex;align-items:center;gap:5px}
+  .card .val{font-size:22px;font-weight:600}
+  .info{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;
+    border:1px solid var(--mut);border-radius:50%;color:var(--mut);font-size:10px;font-style:italic;
+    cursor:help;position:relative;flex:none}
+  .info .tip{display:none;position:absolute;bottom:150%;left:50%;transform:translateX(-50%);
+    background:#05070a;color:var(--tx);padding:9px 11px;border-radius:8px;width:220px;max-width:70vw;
+    font-size:11.5px;font-style:normal;line-height:1.55;z-index:30;border:1px solid var(--accent);
+    text-align:left;font-weight:400;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+  .info:hover .tip{display:block}
+  .info .tip b{color:var(--accent)}
+  .up{color:var(--up)} .down{color:var(--down)} .hold{color:var(--hold)} .mut{color:var(--mut)}
+  section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:20px}
+  section h2{font-size:15px;margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);font-size:13px}
+  th{color:var(--mut);font-weight:500}
+  tbody tr:hover{background:var(--card2)}
+  /* 최근 결정: 길어지면 내부 스크롤 + 헤더 고정 */
+  .scroll-y{max-height:440px;overflow-y:auto}
+  .scroll-y thead th{position:sticky;top:0;background:var(--card);z-index:1}
+  .scroll-y::-webkit-scrollbar{width:9px}
+  .scroll-y::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .pill{padding:2px 9px;border-radius:20px;font-size:12px;font-weight:600;display:inline-block}
+  .pill.BUY,.pill.BULLISH{background:rgba(40,199,111,.15);color:var(--up)}
+  .pill.SELL,.pill.BEARISH{background:rgba(255,92,108,.15);color:var(--down)}
+  .pill.HOLD,.pill.NEUTRAL{background:rgba(245,165,36,.15);color:var(--hold)}
+  .clickable{cursor:pointer}
+  .bar-row{display:flex;align-items:center;gap:10px;margin:7px 0}
+  .bar-row .nm{width:120px;color:var(--mut);font-size:12px}
+  .bar-track{flex:1;background:var(--card2);border-radius:6px;height:16px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:6px}
+  .bar-row .pct{width:44px;text-align:right;font-variant-numeric:tabular-nums}
+  #detail{position:fixed;top:0;right:0;width:min(460px,92vw);height:100%;background:var(--card);
+    border-left:1px solid var(--line);padding:20px;overflow-y:auto;transform:translateX(100%);
+    transition:transform .2s;z-index:10;box-shadow:-8px 0 30px rgba(0,0,0,.4)}
+  #detail.open{transform:translateX(0)}
+  #detail .close{float:right}
+  .rep{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0}
+  .rep .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .rep .role{font-weight:600}
+  .rep .body{color:var(--tx);font-size:13px;line-height:1.55;white-space:pre-wrap}
+  .empty{color:var(--mut);text-align:center;padding:30px}
+  .final{background:var(--card2);border-radius:10px;padding:14px;margin-bottom:12px;line-height:1.6}
+  .loading{color:var(--mut);padding:24px 0;font-size:13px}
+  .dsec{color:var(--accent);font-size:13px;margin:16px 0 4px;font-weight:600}
+  .dbody{font-size:13px;line-height:1.65;color:var(--tx)}
+  .dlist{margin:6px 0;padding-left:18px;font-size:13px;line-height:1.6}
+  .dlist li{margin:4px 0}
+  svg{width:100%;height:auto;display:block}
+  .legend{color:var(--mut);font-size:12px;margin-top:6px}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>KTrader <span>대시보드</span></h1><span class="sub" id="tagline">한국형 멀티 에이전트 모의투자</span></div>
+  <div style="display:flex;gap:14px;align-items:center">
+    <label class="mockchk" title="체크 해제 시 실제 결정만 집계(모의 백테스트 제외)">
+      <input type="checkbox" id="incmock" checked onchange="loadAll()"> 모의 포함</label>
+    <button onclick="loadAll()">새로고침</button>
+  </div>
+</header>
+<main>
+  <div class="grid cards" id="cards"></div>
+
+  <section>
+    <h2>📈 자산 추이</h2>
+    <div id="equity"><div class="empty">데이터 없음 — <code>ktrader run</code> 또는 <code>backtest</code> 실행 후 표시됩니다.</div></div>
+  </section>
+
+  <div class="grid" style="grid-template-columns:1fr 1fr;gap:20px" id="two">
+    <section>
+      <h2>💼 보유 포지션 <span class="sub">종목 클릭 → 손익 원인 분석</span></h2>
+      <div id="positions"></div>
+    </section>
+    <section>
+      <h2>🎯 에이전트별 신호 적중률</h2>
+      <div id="agents"></div>
+    </section>
+  </div>
+
+  <section>
+    <h2>🧠 최근 결정 <span class="sub">행 클릭 → 에이전트 리포트</span></h2>
+    <div id="decisions" class="scroll-y"></div>
+  </section>
+</main>
+
+<div id="detail">
+  <button class="close" onclick="closeDetail()">닫기 ✕</button>
+  <div id="detail-body"></div>
+</div>
+
+<script>
+const won = v => (v==null? '-' : Math.round(v).toLocaleString('ko-KR')+'원');
+const pct = v => (v==null? 'N/A' : (v>=0?'+':'')+Number(v).toFixed(2)+'%');
+const cls = v => v==null? '' : (v>=0?'up':'down');
+async function j(u){ const r = await fetch(u); return r.json(); }
+function mockQ(){ const c=document.getElementById('incmock'); return c && c.checked ? '?include_mock=1' : ''; }
+
+async function loadSummary(){
+  const m = await j('/api/summary'+mockQ());
+  const acc = m.decision_accuracy;
+  const cards = [
+    ['총자산', won(m.total_equity), '',
+      '현금 + 보유주식 평가액의 합계. <b>현재 포트폴리오 전체 가치</b>입니다.'],
+    ['수익률', pct(m.total_return_pct), cls(m.total_return_pct),
+      '초기자본 대비 총자산의 증감률. <b>(총자산 ÷ 초기자본 − 1)</b>'],
+    ['KOSPI 대비 초과', pct(m.excess_return_pct), cls(m.excess_return_pct),
+      '내 수익률에서 같은 기간 KOSPI 수익률을 뺀 값. <b>양(+)이면 시장을 이긴 것</b>, 음(−)이면 시장에 뒤진 것.'],
+    ['벤치마크(KOSPI)', pct(m.benchmark_return_pct), cls(m.benchmark_return_pct),
+      '같은 기간 코스피 지수 수익률(비교 기준). 지수 조회 실패 시 KODEX200 ETF로 대체합니다.'],
+    ['샤프', m.sharpe==null?'N/A':m.sharpe, '',
+      '위험(변동성) 대비 수익 효율. <b>높을수록 좋음</b>(대략 1 이상이면 양호). 일간수익률 기반 연율화.'],
+    ['MDD', pct(m.mdd_pct), 'down',
+      '최대낙폭(Max Drawdown). 고점 대비 가장 크게 하락한 폭. <b>0에 가까울수록 안정적</b>.'],
+    ['현금', won(m.cash), 'mut',
+      '아직 주식에 투자되지 않은 <b>현금 잔액</b>.'],
+    ['최종결정 적중률', acc==null?'N/A':Math.round(acc*100)+'%', '',
+      '포트폴리오매니저의 최종 결정(매수/매도/보유)이 <b>5일 뒤 실제 방향과 맞은 비율</b>. 결정일+5거래일 경과분만 집계.'],
+  ];
+  document.getElementById('cards').innerHTML = cards.map(c=>
+    `<div class="card"><div class="label">${c[0]}<span class="info">i<span class="tip">${c[3]}</span></span></div>
+     <div class="val ${c[2]}">${c[1]}</div></div>`).join('');
+}
+
+async function loadPositions(){
+  const p = await j('/api/positions');
+  const el = document.getElementById('positions');
+  if(!p.length){ el.innerHTML='<div class="empty">보유 종목 없음</div>'; return; }
+  el.innerHTML = `<table><thead><tr><th>종목</th><th class="num">수량</th>
+    <th class="num">평단</th><th class="num">현재가</th><th class="num">평가손익</th></tr></thead>
+    <tbody>${p.map(r=>`<tr class="clickable" onclick="openDiagnose('${r.ticker}','${r.name}')">
+    <td>${r.name}<br><span class="mut">${r.ticker}</span></td>
+    <td class="num">${r.qty.toLocaleString()}</td><td class="num">${won(r.avg_price)}</td>
+    <td class="num">${won(r.price)}</td><td class="num ${cls(r.pnl_pct)}">${pct(r.pnl_pct)}</td></tr>`).join('')}
+    </tbody></table>`;
+}
+
+async function loadAgents(){
+  const a = await j('/api/agents'+mockQ());
+  const el = document.getElementById('agents');
+  if(!a.length){ el.innerHTML='<div class="empty">사후평가된 결정이 아직 없습니다<br><span class="sub">(결정일+5일 경과 후 집계)</span></div>'; return; }
+  el.innerHTML = a.map(r=>{
+    const hr = r.hit_rate==null?0:Math.round(r.hit_rate*100);
+    const color = hr>=55?'var(--up)':hr>=45?'var(--hold)':'var(--down)';
+    return `<div class="bar-row"><div class="nm">${r.role_ko}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${hr}%;background:${color}"></div></div>
+      <div class="pct">${hr}%</div></div>`;
+  }).join('') + `<div class="legend">막대 = 신호 방향 적중률 · 표본 n은 결정 누적에 따라 증가</div>`;
+}
+
+async function loadDecisions(){
+  const d = await j('/api/decisions?limit=40');
+  const el = document.getElementById('decisions');
+  if(!d.length){ el.innerHTML='<div class="empty">결정 기록 없음</div>'; return; }
+  el.innerHTML = `<table><thead><tr><th>기준일</th><th>종목</th><th>결정</th>
+    <th class="num">목표비중</th><th class="num">확신</th><th class="num">기준가</th></tr></thead>
+    <tbody>${d.map(r=>`<tr class="clickable" onclick="openDetail(${r.id})">
+    <td>${r.run_date}${r.mock?' <span class="sub">(모의)</span>':''}</td>
+    <td>${r.name}<br><span class="mut">${r.ticker}</span></td>
+    <td><span class="pill ${r.action}">${r.action}</span></td>
+    <td class="num">${(r.target_weight*100).toFixed(0)}%</td>
+    <td class="num">${r.confidence==null?'-':Math.round(r.confidence*100)+'%'}</td>
+    <td class="num">${won(r.price)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function drawEquity(pts){
+  const el = document.getElementById('equity');
+  if(pts.length<2){ return; }
+  const W=1100,H=280,pad=44;
+  const eq = pts.map(p=>p.equity);
+  const min=Math.min(...eq), max=Math.max(...eq), span=(max-min)||1;
+  const x=i=> pad + i*(W-2*pad)/(pts.length-1);
+  const y=v=> H-pad - (v-min)/span*(H-2*pad);
+  const line = pts.map((p,i)=>`${x(i).toFixed(1)},${y(p.equity).toFixed(1)}`).join(' ');
+  const area = `${pad},${H-pad} ${line} ${x(pts.length-1)},${H-pad}`;
+  const first=eq[0], last=eq[eq.length-1], color=last>=first?'var(--up)':'var(--down)';
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${color}" stop-opacity=".25"/>
+      <stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+    <line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="var(--line)"/>
+    <polygon points="${area}" fill="url(#g)"/>
+    <polyline points="${line}" fill="none" stroke="${color}" stroke-width="2"/>
+    <text x="${pad}" y="20" fill="var(--mut)" font-size="12">${won(max)}</text>
+    <text x="${pad}" y="${H-pad+18}" fill="var(--mut)" font-size="12">${pts[0].date}</text>
+    <text x="${W-pad}" y="${H-pad+18}" fill="var(--mut)" font-size="12" text-anchor="end">${pts[pts.length-1].date}</text>
+  </svg><div class="legend">시작 ${won(first)} → 현재 ${won(last)}</div>`;
+}
+async function loadEquity(){ drawEquity(await j('/api/equity')); }
+
+async function openDetail(id){
+  const d = await j('/api/run/'+id);
+  const run=d.run, reps=d.reports;
+  const groups=[['분석가팀',['disclosure','news','technical']],
+    ['리서치 토론',['bull','bear','research_manager']],
+    ['트레이더',['trader']],
+    ['리스크 심의',['risk_aggressive','risk_neutral','risk_conservative']]];
+  let html=`<h2>${run.name} <span class="mut">${run.ticker}</span></h2>
+    <div class="sub">${run.run_date} · 기준가 ${won(run.price)}</div>
+    <div class="final"><b>포트폴리오매니저 최종:</b> <span class="pill ${run.action}">${run.action}</span>
+     목표비중 ${(run.target_weight*100).toFixed(0)}% · 확신 ${Math.round((run.confidence||0)*100)}%
+     <div style="margin-top:8px">${run.rationale||''}</div></div>`;
+  for(const [title,roles] of groups){
+    const rs=reps.filter(r=>roles.includes(r.role));
+    if(!rs.length) continue;
+    html+=`<h3 style="color:var(--mut);font-size:13px;margin:16px 0 4px">${title}</h3>`;
+    html+=rs.map(r=>`<div class="rep"><div class="top"><span class="role">${r.role_ko}</span>
+      <span class="pill ${r.signal}">${r.signal}${r.confidence?' · '+Math.round(r.confidence*100)+'%':''}</span></div>
+      <div class="body">${(r.summary||'').replace(/</g,'&lt;')}</div></div>`).join('');
+  }
+  document.getElementById('detail-body').innerHTML=html;
+  document.getElementById('detail').classList.add('open');
+}
+function closeDetail(){ document.getElementById('detail').classList.remove('open'); }
+
+function esc(s){ return (s||'').replace(/</g,'&lt;'); }
+async function openDiagnose(ticker, name){
+  const panel=document.getElementById('detail'), body=document.getElementById('detail-body');
+  body.innerHTML=`<h2>${name||ticker} <span class="mut">${ticker}</span></h2>
+    <div class="loading">🔎 손익 원인 분석 중… <span class="sub">최초 1회는 최대 30초 소요</span></div>`;
+  panel.classList.add('open');
+  let d;
+  try{ d=await j('/api/diagnose/'+ticker); }
+  catch(e){ body.innerHTML='<div class="empty">분석 요청 실패</div>'; return; }
+  const pill = d.pnl==null?'':`<span class="pill ${d.pnl>=0?'BUY':'SELL'}">${pct(d.pnl)}</span>`;
+  let html=`<h2>${d.company} <span class="mut">${d.ticker}</span> ${pill}</h2>
+    <div class="sub">${d.pos_block}</div>`;
+  if(d.summary || (d.factors&&d.factors.length)){
+    if(d.summary) html+=`<div class="final"><b>핵심 원인</b><div style="margin-top:6px">${esc(d.summary)}</div></div>`;
+    if(d.factors&&d.factors.length)
+      html+=`<h3 class="dsec">세부 요인</h3><ul class="dlist">${d.factors.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>`;
+    for(const [k,l] of [['fundamental','펀더멘털'],['news_flow','뉴스·수급'],['technical','기술적'],['outlook','향후 관점']])
+      if(d[k]) html+=`<h3 class="dsec">${l}</h3><div class="dbody">${esc(d[k])}</div>`;
+  } else if(d.raw){
+    html+=`<div class="dbody">${esc(d.raw)}</div>`;
+  } else {
+    html+=`<div class="empty">분석 내용을 가져오지 못했습니다.</div>`;
+  }
+  if(d.cost_usd) html+=`<div class="legend">분석 비용 약 $${d.cost_usd}${d.mock?' · 모의모드':''}</div>`;
+  body.innerHTML=html;
+}
+
+async function loadAll(){
+  await Promise.all([loadSummary(),loadPositions(),loadAgents(),loadDecisions(),loadEquity()]);
+}
+loadAll();
+</script>
+</body>
+</html>

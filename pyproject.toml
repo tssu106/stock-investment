@@ -1,0 +1,35 @@
+[project]
+name = "ktrader"
+version = "0.1.0"
+description = "한국형 멀티 에이전트 모의투자 프로그램 (DART 공시 + 네이버 뉴스 + KRX 시세 기반 AI 분석)"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.40",
+    "pandas>=2.0",
+    "pykrx>=1.0.45",
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+web = ["fastapi>=0.110", "uvicorn>=0.29"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+ktrader = "ktrader.cli:app"
+ktrader-web = "ktrader.web.app:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ktrader*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
