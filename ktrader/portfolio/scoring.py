@@ -82,15 +82,9 @@ def portfolio_metrics(cfg: Config, repo: Repo, price_map: dict[str, float]) -> d
     }
 
     curve = repo.equity_curve()
-    if len(curve) >= 3:
+    if len(curve) >= 2:
         eq = [r["total_equity"] for r in curve]
-        rets = [eq[i] / eq[i - 1] - 1 for i in range(1, len(eq)) if eq[i - 1]]
-        if rets:
-            mean = sum(rets) / len(rets)
-            var = sum((x - mean) ** 2 for x in rets) / len(rets)
-            std = math.sqrt(var)
-            if std > 0:
-                metrics["sharpe"] = round(mean / std * math.sqrt(252), 3)
+        # MDD (스냅샷 2개부터 의미 있음)
         peak = eq[0]
         mdd = 0.0
         for v in eq:
@@ -98,7 +92,7 @@ def portfolio_metrics(cfg: Config, repo: Repo, price_map: dict[str, float]) -> d
             mdd = min(mdd, v / peak - 1)
         metrics["mdd_pct"] = round(mdd * 100, 2)
 
-        # 벤치마크(KOSPI) 대비 초과수익
+        # 벤치마크(KOSPI) 대비 초과수익 (2개부터 계산)
         start, end = curve[0]["snapshot_date"], curve[-1]["snapshot_date"]
         bench = market.get_benchmark_series(cfg.portfolio.benchmark,
                                             market.norm_date(start), market.norm_date(end))
@@ -106,6 +100,15 @@ def portfolio_metrics(cfg: Config, repo: Repo, price_map: dict[str, float]) -> d
             bench_ret = (bench.iloc[-1] / bench.iloc[0] - 1) * 100
             metrics["benchmark_return_pct"] = round(bench_ret, 2)
             metrics["excess_return_pct"] = round(total_return - bench_ret, 2)
+
+        # 샤프 (표본이 적으면 노이즈 → 스냅샷 3개 이상부터)
+        if len(curve) >= 3:
+            rets = [eq[i] / eq[i - 1] - 1 for i in range(1, len(eq)) if eq[i - 1]]
+            if rets:
+                mean = sum(rets) / len(rets)
+                std = math.sqrt(sum((x - mean) ** 2 for x in rets) / len(rets))
+                if std > 0:
+                    metrics["sharpe"] = round(mean / std * math.sqrt(252), 3)
 
     return metrics
 
