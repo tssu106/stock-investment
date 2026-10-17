@@ -211,6 +211,13 @@ def run(
     # 자산 스냅샷
     broker.repo.snapshot_equity(
         _iso(trade_date), broker.cash, broker.holdings_value(price_map))
+
+    # 성숙된 과거 결정 자동 사후평가 (적중률/성과가 매일 자동 갱신되도록)
+    from .portfolio import scoring
+    n_eval = scoring.evaluate_pending_outcomes(cfg, repo, as_of=trade_date)
+    if n_eval:
+        console.print(f"[dim]사후평가 {n_eval}건 갱신[/]")
+
     _print_portfolio(cfg, repo, broker, price_map)
     if not client.mock:
         u = client.usage
